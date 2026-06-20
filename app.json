@@ -1,37 +1,50 @@
 {
   "expo": {
-    "name": "GM",
-    "slug": "GM",
+    "name": "Fifty-Two",
+    "slug": "fifty-two",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "gm",
+    "scheme": "fiftytwo",
     "userInterfaceStyle": "automatic",
+    "description": "Every card game, in your pocket. Offline rules reference with favorites, custom notes, and house rules.",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fiftytwo.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0F172A",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "package": "com.fiftytwo.app",
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "Fifty-Two",
+      "shortName": "52",
+      "description": "Every card game, in your pocket — works offline",
+      "themeColor": "#0F172A",
+      "backgroundColor": "#F5F0E8",
+      "display": "standalone",
+      "startUrl": "/",
+      "lang": "en"
     },
     "plugins": [
       "expo-router",
+      "expo-sqlite",
+      "expo-sharing",
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#0F172A"
         }
       ]
     ],
