@@ -95,7 +95,7 @@ export default function SubmitScreen() {
     <ScreenContainer>
       <Text style={[styles.title, { fontFamily: Typography.display }]}>Request a Game</Text>
       <Text style={[styles.hint, { color: colors.muted, fontFamily: Typography.body }]}>
-        Tell us what to add next. We'll prioritize the most-requested games.
+        Tell us what to add next. Requests are stored on this device — we'll prioritize the most-requested games.
       </Text>
 
       {feedback && <FeedbackBanner message={feedback.message} type={feedback.type} />}

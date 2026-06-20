@@ -1,4 +1,4 @@
-const CACHE_NAME = 'game-master-v1';
+const CACHE_NAME = 'fifty-two-v1';
 const PRECACHE_URLS = ['/', '/manifest.json'];
 
 self.addEventListener('install', (event) => {

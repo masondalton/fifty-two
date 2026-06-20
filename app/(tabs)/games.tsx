@@ -4,24 +4,28 @@ import { FlatList, Pressable, StyleSheet, useWindowDimensions, View as RNView } 
 
 import GameCard from '@/components/GameCard';
 import LoadingScreen from '@/components/LoadingScreen';
+import RecentlyOpenedStrip from '@/components/RecentlyOpenedStrip';
 import SearchBar from '@/components/SearchBar';
 import { Text, View } from '@/components/Themed';
 import Colors from '@/constants/Colors';
 import { CategoryColors, Typography } from '@/constants/Theme';
 import { getGridColumns, spacing } from '@/constants/Layout';
-import { searchGames } from '@/db/queries';
+import { getRecentlyOpenedGames, searchGames } from '@/db/queries';
 import { useDatabase } from '@/context/DatabaseContext';
 import { getGameCategory } from '@/lib/gameVisuals';
 import type { GameWithState } from '@/types/game';
 import { useColorScheme } from '@/components/useColorScheme';
 
 const FILTER_TAGS = ['all', 'trick-taking', 'rummy', 'shedding', 'solitaire', 'party', 'fishing'] as const;
+type SortMode = 'alpha' | 'recent';
 
 export default function GamesScreen() {
   const { db, ready, error, refreshKey } = useDatabase();
   const [games, setGames] = useState<GameWithState[]>([]);
+  const [recentGames, setRecentGames] = useState<GameWithState[]>([]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<(typeof FILTER_TAGS)[number]>('all');
+  const [sort, setSort] = useState<SortMode>('alpha');
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const { width } = useWindowDimensions();
@@ -30,6 +34,7 @@ export default function GamesScreen() {
   const loadGames = useCallback(async () => {
     if (!db) return;
     setGames(await searchGames(db, query));
+    setRecentGames(await getRecentlyOpenedGames(db));
   }, [db, query]);
 
   useFocusEffect(
@@ -43,9 +48,21 @@ export default function GamesScreen() {
   }, [query, loadGames]);
 
   const filtered = useMemo(() => {
-    if (filter === 'all') return games;
-    return games.filter((g) => getGameCategory(g) === filter || g.tags.includes(filter));
-  }, [games, filter]);
+    let list = filter === 'all' ? games : games.filter((g) => getGameCategory(g) === filter || g.tags.includes(filter));
+    if (sort === 'alpha') {
+      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      list = [...list].sort((a, b) => {
+        const aTime = a.userState?.lastOpenedAt ? new Date(a.userState.lastOpenedAt).getTime() : 0;
+        const bTime = b.userState?.lastOpenedAt ? new Date(b.userState.lastOpenedAt).getTime() : 0;
+        if (bTime !== aTime) return bTime - aTime;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    return list;
+  }, [games, filter, sort]);
+
+  const showRecents = !query.trim();
 
   if (error) {
     return (
@@ -68,6 +85,7 @@ export default function GamesScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <RNView style={styles.header}>
+            {showRecents && <RecentlyOpenedStrip games={recentGames} />}
             <SearchBar value={query} onChangeText={setQuery} />
             <RNView style={styles.filters}>
               {FILTER_TAGS.map((tag) => {
@@ -94,9 +112,36 @@ export default function GamesScreen() {
                 );
               })}
             </RNView>
-            <Text style={[styles.count, { color: colors.muted, fontFamily: Typography.body }]}>
-              {filtered.length} game{filtered.length === 1 ? '' : 's'}
-            </Text>
+            <RNView style={styles.countRow}>
+              <Text style={[styles.count, { color: colors.muted, fontFamily: Typography.body }]}>
+                {filtered.length} game{filtered.length === 1 ? '' : 's'}
+              </Text>
+              <RNView style={styles.sortRow}>
+                {(['alpha', 'recent'] as const).map((mode) => {
+                  const active = sort === mode;
+                  const label = mode === 'alpha' ? 'A–Z' : 'Recent';
+                  return (
+                    <Pressable
+                      key={mode}
+                      onPress={() => setSort(mode)}
+                      style={[
+                        styles.sortChip,
+                        active
+                          ? { backgroundColor: colors.accent, borderColor: colors.accent }
+                          : { backgroundColor: 'transparent', borderColor: colors.border },
+                      ]}>
+                      <Text
+                        style={[
+                          styles.sortChipText,
+                          { color: active ? '#fff' : colors.text, fontFamily: Typography.bodyMedium },
+                        ]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </RNView>
+            </RNView>
           </RNView>
         }
         renderItem={({ item }) => (
@@ -105,7 +150,21 @@ export default function GamesScreen() {
           </RNView>
         )}
         ListEmptyComponent={
-          <Text style={[styles.empty, { color: colors.muted }]}>No games match your search.</Text>
+          <RNView style={styles.emptyWrap}>
+            <Text style={[styles.empty, { color: colors.muted }]}>No games match your search.</Text>
+            {(query.trim() || filter !== 'all') && (
+              <Pressable
+                onPress={() => {
+                  setQuery('');
+                  setFilter('all');
+                }}
+                style={styles.clearBtn}>
+                <Text style={[styles.clearBtnText, { color: colors.accent, fontFamily: Typography.bodyMedium }]}>
+                  Clear search and filters
+                </Text>
+              </Pressable>
+            )}
+          </RNView>
         }
       />
     </View>
@@ -130,6 +189,18 @@ const styles = StyleSheet.create({
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   chipText: { fontSize: 12 },
-  count: { fontSize: 13, marginBottom: spacing.sm },
-  empty: { textAlign: 'center', marginTop: spacing.lg, fontSize: 15 },
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  count: { fontSize: 13 },
+  sortRow: { flexDirection: 'row', gap: spacing.sm },
+  sortChip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
+  sortChipText: { fontSize: 12 },
+  emptyWrap: { alignItems: 'center', marginTop: spacing.lg },
+  empty: { fontSize: 15, textAlign: 'center' },
+  clearBtn: { marginTop: spacing.md, padding: spacing.sm },
+  clearBtnText: { fontSize: 15, fontWeight: '600' },
 });

@@ -75,7 +75,7 @@ export default function MyGamesScreen() {
         )}
         ListEmptyComponent={
           <Text style={[styles.empty, { color: colors.muted }]}>
-            No custom games yet. Tap Create to add your first house rules variant.
+            No custom games yet. Tap Create above to write and save your own rule sets locally.
           </Text>
         }
       />

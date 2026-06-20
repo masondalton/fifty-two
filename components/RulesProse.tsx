@@ -1,4 +1,5 @@
-import { StyleSheet, View } from 'react-native';
+import { type ReactNode } from 'react';
+import { StyleSheet, View, type View as ViewType } from 'react-native';
 
 import { Text } from '@/components/Themed';
 import Colors from '@/constants/Colors';
@@ -13,6 +14,7 @@ interface RulesProseProps {
   winCondition?: string;
   houseRules?: RuleSection[] | null;
   houseRulesTitle?: string;
+  registerSection?: (id: string, node: ViewType | null) => void;
 }
 
 function Paragraphs({ text, muted }: { text: string; muted?: boolean }) {
@@ -36,12 +38,33 @@ function Paragraphs({ text, muted }: { text: string; muted?: boolean }) {
   );
 }
 
+function SectionWrap({
+  id,
+  registerSection,
+  children,
+}: {
+  id: string;
+  registerSection?: RulesProseProps['registerSection'];
+  children: ReactNode;
+}) {
+  return (
+    <View
+      ref={(node) => registerSection?.(id, node)}
+      onLayout={() => {
+        // Re-measure after layout shifts (e.g. variation change)
+      }}>
+      {children}
+    </View>
+  );
+}
+
 export default function RulesProse({
   setup,
   rules,
   winCondition,
   houseRules,
   houseRulesTitle = 'Your House Rules',
+  registerSection,
 }: RulesProseProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -49,49 +72,57 @@ export default function RulesProse({
   return (
     <View style={styles.container}>
       {setup ? (
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeading, { fontFamily: Typography.displayRegular }]}>Setup</Text>
-          <Paragraphs text={setup} />
-        </View>
+        <SectionWrap id="setup" registerSection={registerSection}>
+          <View style={styles.section}>
+            <Text style={[styles.sectionHeading, { fontFamily: Typography.displayRegular }]}>Setup</Text>
+            <Paragraphs text={setup} />
+          </View>
+        </SectionWrap>
       ) : null}
 
       {rules.length > 0 && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeading, { fontFamily: Typography.displayRegular }]}>Rules</Text>
-          {rules.map((section, index) => (
-            <View key={`${section.title}-${index}`}>
-              {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-              <Text style={[styles.subHeading, { fontFamily: Typography.bodyBold }]}>{section.title}</Text>
-              <Paragraphs text={section.content} muted />
-            </View>
-          ))}
-        </View>
+        <SectionWrap id="rules" registerSection={registerSection}>
+          <View style={styles.section}>
+            <Text style={[styles.sectionHeading, { fontFamily: Typography.displayRegular }]}>Rules</Text>
+            {rules.map((section, index) => (
+              <View key={`${section.title}-${index}`}>
+                {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
+                <Text style={[styles.subHeading, { fontFamily: Typography.bodyBold }]}>{section.title}</Text>
+                <Paragraphs text={section.content} muted />
+              </View>
+            ))}
+          </View>
+        </SectionWrap>
       )}
 
       {winCondition ? (
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeading, { fontFamily: Typography.displayRegular }]}>Win Condition</Text>
-          <View style={[styles.callout, { borderLeftColor: colors.accent }]}>
-            <Paragraphs text={winCondition} />
+        <SectionWrap id="win" registerSection={registerSection}>
+          <View style={styles.section}>
+            <Text style={[styles.sectionHeading, { fontFamily: Typography.displayRegular }]}>Win Condition</Text>
+            <View style={[styles.callout, { borderLeftColor: colors.accent }]}>
+              <Paragraphs text={winCondition} />
+            </View>
           </View>
-        </View>
+        </SectionWrap>
       ) : null}
 
       {houseRules && houseRules.length > 0 && (
-        <View style={styles.section}>
-          <View style={[styles.divider, { backgroundColor: colors.border, marginBottom: spacing.lg }]} />
-          <Text style={[styles.houseRulesLabel, { color: colors.accent, fontFamily: Typography.bodyBold }]}>
-            {houseRulesTitle.toUpperCase()}
-          </Text>
-          {houseRules.map((section, index) => (
-            <View key={`house-${section.title}-${index}`}>
-              {section.title !== 'Custom House Rules' && section.title !== 'Your House Rules' && (
-                <Text style={[styles.subHeading, { fontFamily: Typography.bodyBold }]}>{section.title}</Text>
-              )}
-              <Paragraphs text={section.content} />
-            </View>
-          ))}
-        </View>
+        <SectionWrap id="house-display" registerSection={registerSection}>
+          <View style={styles.section}>
+            <View style={[styles.divider, { backgroundColor: colors.border, marginBottom: spacing.lg }]} />
+            <Text style={[styles.houseRulesLabel, { color: colors.accent, fontFamily: Typography.bodyBold }]}>
+              {houseRulesTitle.toUpperCase()}
+            </Text>
+            {houseRules.map((section, index) => (
+              <View key={`house-${section.title}-${index}`}>
+                {section.title !== 'Custom House Rules' && section.title !== 'Your House Rules' && (
+                  <Text style={[styles.subHeading, { fontFamily: Typography.bodyBold }]}>{section.title}</Text>
+                )}
+                <Paragraphs text={section.content} />
+              </View>
+            ))}
+          </View>
+        </SectionWrap>
       )}
     </View>
   );

@@ -46,6 +46,13 @@ export default function IntroScreen() {
     router.replace('/(tabs)');
   }, [returning, router]);
 
+  const browseGames = useCallback(async () => {
+    if (!returning) {
+      await markIntroSeen();
+    }
+    router.replace('/(tabs)/games');
+  }, [returning, router]);
+
   return (
     <ScreenContainer contentContainerStyle={styles.scrollContent}>
       <RNView style={[styles.hero, { backgroundColor: Brand.felt }, cardShadow]}>
@@ -76,7 +83,7 @@ export default function IntroScreen() {
       </Pressable>
 
       {!returning && (
-        <Pressable onPress={continueToApp} style={styles.secondaryLink}>
+        <Pressable onPress={browseGames} style={styles.secondaryLink}>
           <Text style={[styles.secondaryLinkText, { color: colors.muted, fontFamily: Typography.bodyMedium }]}>
             Browse games
           </Text>

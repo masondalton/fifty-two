@@ -74,6 +74,17 @@ export async function getFavoriteGames(db: DbHandle): Promise<GameWithState[]> {
   return (await getAllGames(db)).filter((g) => g.userState?.isFavorite);
 }
 
+export async function getRecentlyOpenedGames(db: DbHandle, limit = 5): Promise<GameWithState[]> {
+  const all = await getAllGames(db);
+  return all
+    .filter((g) => g.userState?.lastOpenedAt)
+    .sort(
+      (a, b) =>
+        new Date(b.userState!.lastOpenedAt!).getTime() - new Date(a.userState!.lastOpenedAt!).getTime()
+    )
+    .slice(0, limit);
+}
+
 export async function getUserCreatedGames(db: DbHandle): Promise<GameWithState[]> {
   return (await getAllGames(db)).filter((g) => g.isUserCreated);
 }

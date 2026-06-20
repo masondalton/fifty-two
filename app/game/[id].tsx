@@ -1,19 +1,22 @@
 import { useLocalSearchParams, useNavigation } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Linking,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   useWindowDimensions,
   View as RNView,
+  type View,
 } from 'react-native';
 
 import LoadingScreen from '@/components/LoadingScreen';
 import RulesProse from '@/components/RulesProse';
 import ScreenContainer from '@/components/ScreenContainer';
-import { Text, View } from '@/components/Themed';
+import { Text } from '@/components/Themed';
 import Colors from '@/constants/Colors';
 import { breakpoints, cardShadow, spacing } from '@/constants/Layout';
 import { Typography } from '@/constants/Theme';
@@ -32,11 +35,22 @@ import { printGame, shareGame } from '@/lib/share';
 import type { GameWithState, RuleSection } from '@/types/game';
 import { useColorScheme } from '@/components/useColorScheme';
 
+const SECTION_JUMPS = [
+  { id: 'setup', label: 'Setup' },
+  { id: 'rules', label: 'Rules' },
+  { id: 'win', label: 'Win' },
+  { id: 'notes', label: 'Notes' },
+  { id: 'house', label: 'House' },
+] as const;
+
 export default function GameDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { db, ready, refresh } = useDatabase();
   const { showToast } = useToast();
   const navigation = useNavigation();
+  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<View>(null);
+  const sectionOffsets = useRef<Record<string, number>>({});
   const { width } = useWindowDimensions();
   const isDesktop = width >= breakpoints.desktop;
   const colorScheme = useColorScheme() ?? 'light';
@@ -47,6 +61,12 @@ export default function GameDetailScreen() {
   const [editingRules, setEditingRules] = useState(false);
   const [customRulesText, setCustomRulesText] = useState('');
   const [selectedVariation, setSelectedVariation] = useState<string | null>(null);
+
+  const savedNotes = game?.userState?.customNotes ?? '';
+  const savedHouseRules = game?.userState?.customRulesOverride?.[0]?.content ?? '';
+  const notesDirty = notes !== savedNotes;
+  const houseRulesDirty = editingRules && customRulesText !== savedHouseRules;
+  const isDirty = notesDirty || houseRulesDirty;
 
   const loadGame = useCallback(async () => {
     if (!db || !id) return;
@@ -62,6 +82,61 @@ export default function GameDetailScreen() {
   useEffect(() => {
     loadGame();
   }, [loadGame]);
+
+  const registerSection = useCallback((sectionId: string, node: View | null) => {
+    if (!node || !contentRef.current) return;
+    node.measureLayout(
+      contentRef.current,
+      (_x, y) => {
+        sectionOffsets.current[sectionId] = y;
+      },
+      () => {}
+    );
+  }, []);
+
+  const jumpToSection = (sectionId: string) => {
+    const y = sectionOffsets.current[sectionId];
+    if (y != null) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - spacing.sm), animated: true });
+    }
+  };
+
+  const persistChanges = useCallback(async () => {
+    if (!db || !game) return;
+    if (notesDirty) {
+      await setCustomNotes(db, game.id, notes);
+    }
+    if (houseRulesDirty) {
+      if (!customRulesText.trim()) {
+        await setCustomRulesOverride(db, game.id, null);
+      } else {
+        const override: RuleSection[] = [{ title: 'Your House Rules', content: customRulesText.trim() }];
+        await setCustomRulesOverride(db, game.id, override);
+      }
+      setEditingRules(false);
+    }
+    refresh();
+    await loadGame();
+  }, [db, game, notes, notesDirty, houseRulesDirty, customRulesText, refresh, loadGame]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      Alert.alert('Unsaved changes', 'Save your notes or house rules before leaving?', [
+        { text: "Don't save", style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: async () => {
+            await persistChanges();
+            navigation.dispatch(e.data.action);
+          },
+        },
+      ]);
+    });
+    return unsubscribe;
+  }, [navigation, isDirty, persistChanges]);
 
   const toggleFavorite = async () => {
     if (!db || !game) return;
@@ -83,6 +158,7 @@ export default function GameDetailScreen() {
     await setCustomNotes(db, game.id, notes);
     refresh();
     showToast('Saved!');
+    await loadGame();
   };
 
   const saveCustomRules = async () => {
@@ -91,9 +167,7 @@ export default function GameDetailScreen() {
       await setCustomRulesOverride(db, game.id, null);
       showToast('Restored default rules');
     } else {
-      const override: RuleSection[] = [
-        { title: 'Your House Rules', content: customRulesText.trim() },
-      ];
+      const override: RuleSection[] = [{ title: 'Your House Rules', content: customRulesText.trim() }];
       await setCustomRulesOverride(db, game.id, override);
       showToast('House rules saved');
     }
@@ -121,6 +195,13 @@ export default function GameDetailScreen() {
   const displaySetup = activeVariation?.setup ?? game.setup;
   const displayWin = activeVariation?.winCondition ?? game.winCondition;
   const houseRules = game.userState?.customRulesOverride;
+
+  const visibleJumps = SECTION_JUMPS.filter(({ id: sectionId }) => {
+    if (sectionId === 'setup') return !!displaySetup;
+    if (sectionId === 'rules') return baseRules.length > 0;
+    if (sectionId === 'win') return !!displayWin;
+    return true;
+  });
 
   const sidebar = (
     <RNView style={[isDesktop && styles.sidebar]}>
@@ -153,9 +234,7 @@ export default function GameDetailScreen() {
             accent
           />
           <ActionButton label="Share" onPress={handleShare} colors={colors} />
-          {Platform.OS === 'web' && (
-            <ActionButton label="Print" onPress={() => printGame(game)} colors={colors} />
-          )}
+          {Platform.OS === 'web' && <ActionButton label="Print" onPress={() => printGame(game)} colors={colors} />}
         </RNView>
       </RNView>
 
@@ -182,14 +261,28 @@ export default function GameDetailScreen() {
 
   const mainContent = (
     <RNView style={[isDesktop && styles.mainColumn]}>
+      <RNView style={styles.jumpRow}>
+        {visibleJumps.map(({ id: sectionId, label }) => (
+          <Pressable
+            key={sectionId}
+            onPress={() => jumpToSection(sectionId)}
+            style={[styles.jumpChip, { borderColor: colors.border }]}>
+            <Text style={[styles.jumpChipText, { color: colors.text, fontFamily: Typography.bodyMedium }]}>{label}</Text>
+          </Pressable>
+        ))}
+      </RNView>
+
       <RulesProse
         setup={displaySetup}
         rules={baseRules}
         winCondition={displayWin}
         houseRules={houseRules}
+        registerSection={registerSection}
       />
 
-      <RNView style={[styles.notesSection, { borderTopColor: colors.border }]}>
+      <RNView
+        ref={(node) => registerSection('notes', node)}
+        style={[styles.notesSection, { borderTopColor: colors.border }]}>
         <Text style={[styles.notesHeading, { fontFamily: Typography.displayRegular }]}>My Notes</Text>
         <TextInput
           style={[styles.notesInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card, fontFamily: Typography.body }]}
@@ -202,7 +295,7 @@ export default function GameDetailScreen() {
         <ActionButton label="Save Notes" onPress={saveNotes} colors={colors} accent />
       </RNView>
 
-      <RNView style={styles.notesSection}>
+      <RNView ref={(node) => registerSection('house', node)} style={styles.notesSection}>
         <Text style={[styles.notesHeading, { fontFamily: Typography.displayRegular }]}>House Rules</Text>
         <Text style={[styles.houseHint, { color: colors.muted, fontFamily: Typography.body }]}>
           Add rules that supplement the official rules above — they won't replace them.
@@ -229,9 +322,7 @@ export default function GameDetailScreen() {
             <RNView style={styles.editActions}>
               <ActionButton label="Save" onPress={saveCustomRules} colors={colors} accent />
               <ActionButton label="Cancel" onPress={() => setEditingRules(false)} colors={colors} />
-              {houseRules?.length ? (
-                <ActionButton label="Clear" onPress={resetCustomRules} colors={colors} />
-              ) : null}
+              {houseRules?.length ? <ActionButton label="Clear" onPress={resetCustomRules} colors={colors} /> : null}
             </RNView>
           </>
         )}
@@ -250,11 +341,13 @@ export default function GameDetailScreen() {
   );
 
   return (
-    <ScreenContainer nativeID="game-detail-print">
-      {!isDesktop && sidebar}
-      <RNView style={isDesktop ? styles.desktopRow : undefined}>
-        {isDesktop && sidebar}
-        {mainContent}
+    <ScreenContainer ref={scrollRef} nativeID="game-detail-print">
+      <RNView ref={contentRef}>
+        {!isDesktop && sidebar}
+        <RNView style={isDesktop ? styles.desktopRow : undefined}>
+          {isDesktop && sidebar}
+          {mainContent}
+        </RNView>
       </RNView>
     </ScreenContainer>
   );
@@ -287,7 +380,8 @@ function ActionButton({
       onPress={onPress}
       style={[styles.actionBtn, accent ? { backgroundColor: colors.accent } : { borderColor: colors.border, borderWidth: 1 }]}>
       <Text style={[styles.actionBtnText, { color: accent ? '#fff' : colors.text, fontFamily: Typography.bodyMedium }]}>
-        {icon ? `${icon} ` : ''}{label}
+        {icon ? `${icon} ` : ''}
+        {label}
       </Text>
     </Pressable>
   );
@@ -328,6 +422,22 @@ const styles = StyleSheet.create({
   mainColumn: {
     flex: 1,
     minWidth: 0,
+  },
+  jumpRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  jumpChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  jumpChipText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   heroMeta: {
     borderRadius: 12,

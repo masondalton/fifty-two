@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, useWindowDimensions, View, type ViewStyle } from 'react-native';
 
 import { useColorScheme } from '@/components/useColorScheme';
@@ -13,13 +13,10 @@ interface ScreenContainerProps {
   nativeID?: string;
 }
 
-export default function ScreenContainer({
-  children,
-  scroll = true,
-  style,
-  contentContainerStyle,
-  nativeID,
-}: ScreenContainerProps) {
+const ScreenContainer = forwardRef<ScrollView, ScreenContainerProps>(function ScreenContainer(
+  { children, scroll = true, style, contentContainerStyle, nativeID },
+  ref
+) {
   const { width } = useWindowDimensions();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -51,13 +48,16 @@ export default function ScreenContainer({
 
   return (
     <ScrollView
+      ref={ref}
       style={[styles.root, { backgroundColor: colors.background }, style]}
       contentContainerStyle={styles.scrollContent}
       nativeID={nativeID}>
       {inner}
     </ScrollView>
   );
-}
+});
+
+export default ScreenContainer;
 
 const styles = StyleSheet.create({
   root: {

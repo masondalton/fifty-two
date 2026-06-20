@@ -69,9 +69,10 @@ export default function HomeScreen() {
         EXPLORE
       </Text>
       <View style={[styles.menuList, { backgroundColor: colors.card, borderColor: colors.border }, cardShadow]}>
+        <MenuButton href="/(tabs)/games" iconName="library-outline" title="Browse All Games" subtitle="Search 40+ games by name or category" />
         <MenuButton href="/theory" iconName="book-outline" title="Game Theory" subtitle="Principles and card game families" />
-        <MenuButton href="/my-games" iconName="create-outline" title="My Created Games" subtitle="House rules you've authored" />
-        <MenuButton href="/submit" iconName="add-circle-outline" title="Request a Game" subtitle="Vote for the next game we add" isLast />
+        <MenuButton href="/my-games" iconName="create-outline" title="My Created Games" subtitle="Write and save your own rule sets locally" />
+        <MenuButton href="/submit" iconName="add-circle-outline" title="Request a Game" subtitle="Suggest a game to add to the catalog" isLast />
       </View>
 
       <Text style={[styles.sectionLabel, styles.sectionSpaced, { color: colors.sectionLabel, fontFamily: Typography.bodyMedium }]}>
@@ -79,7 +80,13 @@ export default function HomeScreen() {
       </Text>
       {favorites.length === 0 ? (
         <Text style={[styles.empty, { color: colors.muted, fontFamily: Typography.body }]}>
-          No favorites yet. Star a game from its detail page or browse all games.
+          No favorites yet. Star a game from its detail page or{' '}
+          <Text
+            onPress={() => router.push('/(tabs)/games' as never)}
+            style={{ color: colors.accent, fontFamily: Typography.bodyMedium }}>
+            browse all games
+          </Text>
+          .
         </Text>
       ) : (
         favorites.map((game) => <GameCard key={game.id} game={game} />)
